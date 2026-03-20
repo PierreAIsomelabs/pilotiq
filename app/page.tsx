@@ -58,10 +58,18 @@ export default function PilotIQ() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [examSubmitted, setExamSubmitted] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"formation" | "prepavol">("formation");
+  const [qaQuestion, setQaQuestion] = useState("");
+  const [qaAnswer, setQaAnswer] = useState("");
+  const [qaLoading, setQaLoading] = useState(false);
+  const [exercisesText, setExercisesText] = useState("");
+  const [exercisesLoading, setExercisesLoading] = useState(false);
+  const [expandedExamples, setExpandedExamples] = useState<Record<string, string>>({});
+  const [exampleLoading, setExampleLoading] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const courseRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const qaRef = useRef<HTMLDivElement>(null);
 
   // Exam timer
   useEffect(() => {
@@ -226,6 +234,100 @@ export default function PilotIQ() {
     }
     setLoading(false);
   };
+
+  const askQuestion = async () => {
+    if (!qaQuestion.trim() || qaLoading) return;
+    setQaAnswer("");
+    setQaLoading(true);
+    try {
+      const res = await fetch("/api/qa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: qaQuestion, courseText, topic: selectedTopic }),
+      });
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setQaAnswer(t => t + decoder.decode(value));
+      }
+    } catch {
+      setQaAnswer("Erreur lors de la réponse. Réessayez.");
+    }
+    setQaLoading(false);
+    setTimeout(() => qaRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+  };
+
+  const generateExercises = async () => {
+    if (exercisesLoading) return;
+    setExercisesText("");
+    setExercisesLoading(true);
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chunks: docData?.chunks || [],
+          topic: selectedTopic || "navigation aérienne",
+          mode: "exercises",
+        }),
+      });
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setExercisesText(t => t + decoder.decode(value));
+      }
+    } catch {
+      setExercisesText("Erreur lors de la génération des exercices.");
+    }
+    setExercisesLoading(false);
+  };
+
+  const generateExample = async (sectionTitle: string) => {
+    if (exampleLoading) return;
+    setExampleLoading(sectionTitle);
+    setExpandedExamples(prev => ({ ...prev, [sectionTitle]: "" }));
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chunks: docData?.chunks || [],
+          topic: selectedTopic || "navigation aérienne",
+          mode: "example",
+          sectionTitle,
+        }),
+      });
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setExpandedExamples(prev => ({ ...prev, [sectionTitle]: (prev[sectionTitle] || "") + decoder.decode(value) }));
+      }
+    } catch {
+      setExpandedExamples(prev => ({ ...prev, [sectionTitle]: "Erreur lors de la génération." }));
+    }
+    setExampleLoading(null);
+  };
+
+  const renderMarkdown = (text: string) => text
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`)
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<[hul]|<\/[hul]|<p|<\/p)(.+)$/gm, '<p>$1</p>');
+
+  const courseSections = courseText
+    ? courseText.split(/(?=^## )/gm).filter(s => s.trim())
+    : [];
 
   const examScore = examData
     ? examData.questions.filter(q => answers[q.id] === q.correct).length
@@ -422,7 +524,7 @@ export default function PilotIQ() {
 
   // ─── COURSE ───
   if (state === "course") return (
-    <div className="min-h-screen p-6 max-w-3xl mx-auto space-y-4">
+    <div className="min-h-screen p-6 max-w-3xl mx-auto space-y-4 pb-32">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-[#00d4ff] font-mono text-sm">📖 Cours IA</span>
@@ -431,31 +533,85 @@ export default function PilotIQ() {
         <button onClick={() => setState("dashboard")} className="text-[#3d4460] hover:text-white font-mono text-sm">← Tableau de bord</button>
       </div>
 
-      <div ref={courseRef} className="panel p-6">
+      {/* Course content with per-section example buttons */}
+      <div ref={courseRef} className="space-y-0">
         {courseText ? (
-          <div
-            className="prose-cockpit"
-            dangerouslySetInnerHTML={{
-              __html: courseText
-                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-                .replace(/^## (.+)$/gm, '<h2>$2</h2>'.replace('$2', '$1'))
-                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                .replace(/`(.+?)`/g, '<code>$1</code>')
-                .replace(/^- (.+)$/gm, '<li>$1</li>')
-                .replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`)
-                .replace(/\n\n/g, '</p><p>')
-                .replace(/^(?!<[hul]|<\/[hul]|<p|<\/p)(.+)$/gm, '<p>$1</p>')
-            }}
-          />
+          courseSections.length > 0 ? courseSections.map((section, idx) => {
+            const titleMatch = section.match(/^##\s+(.+)$/m);
+            const sectionTitle = titleMatch ? titleMatch[1].trim() : `Section ${idx + 1}`;
+            const sectionKey = `${idx}-${sectionTitle}`;
+            return (
+              <div key={idx} className="panel p-6 rounded-none first:rounded-t last:rounded-b border-b-0 last:border-b">
+                <div className="prose-cockpit" dangerouslySetInnerHTML={{ __html: renderMarkdown(section) }} />
+                {titleMatch && (
+                  <div className="mt-4 pt-3 border-t border-[#1c2030]">
+                    {expandedExamples[sectionKey] !== undefined ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#ffb347] font-mono text-xs uppercase tracking-widest">Exemple concret</span>
+                          {exampleLoading === sectionKey && <div className="animate-spin w-3 h-3 border border-[#ffb347] rounded-full border-t-transparent"></div>}
+                        </div>
+                        <div className="rounded p-4 bg-[#ffb347]/5 border border-[#ffb347]/20">
+                          <div className="prose-cockpit text-sm" dangerouslySetInnerHTML={{ __html: renderMarkdown(expandedExamples[sectionKey] || "") }} />
+                        </div>
+                        <button onClick={() => setExpandedExamples(prev => { const n = { ...prev }; delete n[sectionKey]; return n; })}
+                          className="text-[#3d4460] hover:text-white font-mono text-xs transition-colors">
+                          Masquer l'exemple
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => generateExample(sectionKey)}
+                        disabled={exampleLoading !== null}
+                        className="px-3 py-1.5 rounded border border-[#ffb347]/20 text-[#ffb347] font-mono text-xs hover:bg-[#ffb347]/10 transition-colors disabled:opacity-40">
+                        Exemple concret →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          }) : (
+            <div className="panel p-6">
+              <div className="prose-cockpit" dangerouslySetInnerHTML={{ __html: renderMarkdown(courseText) }} />
+            </div>
+          )
         ) : (
-          <div className="flex items-center gap-3 text-[#3d4460]">
+          <div className="panel p-6 flex items-center gap-3 text-[#3d4460]">
             <div className="animate-spin w-4 h-4 border border-[#00d4ff] rounded-full border-t-transparent"></div>
-            <span className="font-mono text-sm cursor">Génération en cours</span>
+            <span className="font-mono text-sm">Génération en cours</span>
           </div>
         )}
       </div>
 
+      {/* Exercices pratiques */}
+      {courseText && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[#00e676] font-mono text-xs uppercase tracking-widest">Exercices pratiques</span>
+            <button
+              onClick={generateExercises}
+              disabled={exercisesLoading}
+              className="px-3 py-1.5 rounded bg-[#00e676]/10 border border-[#00e676]/30 text-[#00e676] font-mono text-xs hover:bg-[#00e676]/20 transition-colors disabled:opacity-40">
+              {exercisesLoading ? "Génération…" : exercisesText ? "Régénérer" : "Générer 3 exercices"}
+            </button>
+          </div>
+          {(exercisesText || exercisesLoading) && (
+            <div className="panel p-6">
+              {exercisesText ? (
+                <div className="prose-cockpit" dangerouslySetInnerHTML={{ __html: renderMarkdown(exercisesText) }} />
+              ) : (
+                <div className="flex items-center gap-3 text-[#3d4460]">
+                  <div className="animate-spin w-4 h-4 border border-[#00e676] rounded-full border-t-transparent"></div>
+                  <span className="font-mono text-sm">Génération des exercices…</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Action buttons */}
       {courseText && (
         <div className="flex gap-3">
           <button onClick={generateQuiz} className="px-4 py-2 rounded bg-[#ffb347]/10 border border-[#ffb347]/30 text-[#ffb347] font-mono text-sm hover:bg-[#ffb347]/20 transition-colors">
@@ -464,6 +620,40 @@ export default function PilotIQ() {
           <button onClick={() => setState("dashboard")} className="px-4 py-2 rounded border border-[#1c2030] text-[#3d4460] font-mono text-sm hover:border-[#3d4460] hover:text-white transition-colors">
             Tableau de bord
           </button>
+        </div>
+      )}
+
+      {/* Q&A answer */}
+      {(qaAnswer || qaLoading) && (
+        <div ref={qaRef} className="panel p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[#00d4ff] font-mono text-xs uppercase tracking-widest">Réponse IA</span>
+            {qaLoading && <div className="animate-spin w-3 h-3 border border-[#00d4ff] rounded-full border-t-transparent"></div>}
+          </div>
+          {qaAnswer && (
+            <div className="prose-cockpit" dangerouslySetInnerHTML={{ __html: renderMarkdown(qaAnswer) }} />
+          )}
+        </div>
+      )}
+
+      {/* Q&A input — sticky bottom */}
+      {courseText && (
+        <div className="fixed bottom-0 left-0 right-0 bg-[#0b0d14]/95 backdrop-blur border-t border-[#1c2030] px-4 py-3 z-20">
+          <div className="max-w-3xl mx-auto flex gap-3">
+            <input
+              value={qaQuestion}
+              onChange={e => setQaQuestion(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askQuestion(); } }}
+              placeholder="Posez une question sur le cours…"
+              className="flex-1 bg-[#08090c] border border-[#1c2030] rounded px-4 py-2.5 font-mono text-sm text-white placeholder-[#3d4460] focus:border-[#00d4ff]/40 focus:outline-none"
+            />
+            <button
+              onClick={askQuestion}
+              disabled={qaLoading || !qaQuestion.trim()}
+              className="px-5 py-2.5 rounded bg-[#00d4ff]/10 border border-[#00d4ff]/30 text-[#00d4ff] font-mono text-sm font-medium hover:bg-[#00d4ff]/20 transition-colors disabled:opacity-40 shrink-0">
+              {qaLoading ? "…" : "Demander"}
+            </button>
+          </div>
         </div>
       )}
     </div>
