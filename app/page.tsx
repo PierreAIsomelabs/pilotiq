@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
 import PrepaVol from "@/components/PrepaVol";
+import { extractPdfText } from "@/lib/extractPdfText";
 
 type AppState = "landing" | "loading" | "dashboard" | "course" | "quiz" | "exam" | "results" | "coach";
 
@@ -75,10 +76,13 @@ export default function PilotIQ() {
   const handleUpload = async (file: File) => {
     setState("loading");
     setError("");
-    const fd = new FormData();
-    fd.append("pdf", file);
     try {
-      const res = await fetch("/api/parse", { method: "POST", body: fd });
+      const { text, pages } = await extractPdfText(file);
+      const res = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, filename: file.name, pages }),
+      });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setDocData(data);

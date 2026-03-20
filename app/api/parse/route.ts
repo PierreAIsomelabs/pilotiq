@@ -6,25 +6,18 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const file = formData.get("pdf") as File;
-    if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
+    const { text, filename, pages } = await req.json();
+    if (!text || typeof text !== "string") {
+      return NextResponse.json({ error: "No text provided" }, { status: 400 });
+    }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    
-    // Dynamic import to avoid issues
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse");
-    const data = await pdfParse(buffer);
-    
-    const text = data.text;
     const totalChars = text.length;
-    
+
     // Split into chunks of ~3000 chars with overlap
     const chunkSize = 3000;
     const overlap = 300;
     const chunks: { id: number; text: string; start: number }[] = [];
-    
+
     for (let i = 0; i < text.length; i += chunkSize - overlap) {
       chunks.push({
         id: chunks.length,
@@ -48,11 +41,11 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      filename: file.name,
-      pages: data.numpages,
+      filename: filename || "document.pdf",
+      pages: pages || 0,
       totalChars,
       chunkCount: chunks.length,
-      chunks: chunks.slice(0, 20), // Send first 20 chunks for demo
+      chunks: chunks.slice(0, 20),
       toc: Array.from(new Set(toc)).slice(0, 30),
       preview: text.slice(0, 500),
     });

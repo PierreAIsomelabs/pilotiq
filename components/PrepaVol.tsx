@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef } from "react";
+import { extractPdfText } from "@/lib/extractPdfText";
 
 interface RadioContact { name: string; freq: string; type: string; }
 interface Waypoint {
@@ -64,12 +65,9 @@ export default function PrepaVol() {
   const chartRef = useRef<HTMLInputElement>(null);
 
   const handleChartUpload = async (file: File) => {
-    const fd = new FormData();
-    fd.append("pdf", file);
     try {
-      const res = await fetch("/api/parse", { method: "POST", body: fd });
-      const data = await res.json();
-      setChartText(data.preview || "");
+      const { text } = await extractPdfText(file);
+      setChartText(text.slice(0, 500));
       setChartFile(file.name);
     } catch {
       setChartFile(file.name + " (erreur parsing)");
