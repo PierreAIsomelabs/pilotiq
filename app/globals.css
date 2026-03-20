@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #08090c;
+  --panel: #0e1016;
+  --border: #1c2030;
+  --accent: #00d4ff;
+  --amber: #ffb347;
+  --green: #00e676;
+  --red: #ff4444;
+  --muted: #3d4460;
+  --text: #c8d0e8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--panel); }
+::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 2px; }
+
+/* Cockpit panel */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* Accent glow */
+.glow-accent { box-shadow: 0 0 20px rgba(0, 212, 255, 0.15); }
+.glow-amber { box-shadow: 0 0 20px rgba(255, 179, 71, 0.15); }
+.glow-green { box-shadow: 0 0 20px rgba(0, 230, 118, 0.15); }
+
+/* Status dot */
+.dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* Progress bar */
+.progress-bar {
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 1px;
+  transition: width 0.5s ease;
+}
+
+/* Prose styles for generated content */
+.prose-cockpit h1, .prose-cockpit h2, .prose-cockpit h3 {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.prose-cockpit h1 { font-size: 1.25rem; }
+.prose-cockpit h2 { font-size: 1.1rem; }
+.prose-cockpit h3 { font-size: 0.95rem; color: var(--amber); }
+.prose-cockpit p { margin-bottom: 0.75rem; line-height: 1.7; font-size: 0.9rem; }
+.prose-cockpit ul { margin-bottom: 0.75rem; padding-left: 1.25rem; }
+.prose-cockpit li { margin-bottom: 0.25rem; font-size: 0.9rem; line-height: 1.6; }
+.prose-cockpit strong { color: #fff; font-weight: 500; }
+.prose-cockpit code { 
+  font-family: 'JetBrains Mono', monospace; 
+  font-size: 0.8rem; 
+  background: rgba(0,212,255,0.08); 
+  padding: 0.1rem 0.3rem; 
+  border-radius: 3px; 
+  color: var(--accent);
+}
+
+/* Animated grid background */
+.grid-bg {
+  background-image: 
+    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Blinking cursor */
+@keyframes blink { 0%,50%{opacity:1}51%,100%{opacity:0} }
+.cursor::after { content: '|'; animation: blink 1s infinite; color: var(--accent); }
+
+/* Fade in */
+@keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+.fade-in { animation: fadeIn 0.4s ease forwards; }
