@@ -77,7 +77,20 @@ export default function PilotIQ() {
     setState("loading");
     setError("");
     try {
-      const { text, pages } = await extractPdfText(file);
+      const { text, pages, scanned } = await extractPdfText(file);
+      if (scanned) {
+        setDocData({
+          filename: file.name,
+          pages,
+          totalChars: 0,
+          chunkCount: 0,
+          chunks: [],
+          toc: [],
+          preview: "⚠ PDF scanné détecté — le texte n'a pas pu être extrait. Vous pouvez sélectionner un thème manuellement pour générer un cours.",
+        });
+        setState("dashboard");
+        return;
+      }
       const res = await fetch("/api/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

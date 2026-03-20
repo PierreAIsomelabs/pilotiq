@@ -1,6 +1,13 @@
 const MAX_CHARS = 50_000;
+const MIN_CHARS_THRESHOLD = 500;
 
-export async function extractPdfText(file: File): Promise<{ text: string; pages: number }> {
+export interface PdfExtractResult {
+  text: string;
+  pages: number;
+  scanned: boolean;
+}
+
+export async function extractPdfText(file: File): Promise<PdfExtractResult> {
   const pdfjsLib = await import("pdfjs-dist");
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
     "pdfjs-dist/build/pdf.worker.mjs",
@@ -22,5 +29,15 @@ export async function extractPdfText(file: File): Promise<{ text: string; pages:
     if (text.length >= MAX_CHARS) break;
   }
 
-  return { text: text.slice(0, MAX_CHARS), pages };
+  const extractedText = text.trim();
+
+  if (extractedText.length < MIN_CHARS_THRESHOLD) {
+    return {
+      text: "",
+      pages,
+      scanned: true,
+    };
+  }
+
+  return { text: extractedText.slice(0, MAX_CHARS), pages, scanned: false };
 }
