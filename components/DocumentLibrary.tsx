@@ -9,6 +9,7 @@ interface Props {
 }
 
 const MAX_DOCS = 5;
+const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8MB
 
 export default function DocumentLibrary({ documents, onDocumentsChange }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -24,6 +25,10 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Props)
       setError("Ce document est déjà dans votre bibliothèque.");
       return;
     }
+    if (file.size > MAX_FILE_SIZE) {
+      setError("Fichier trop volumineux (max 8 Mo).");
+      return;
+    }
 
     setProcessing(true);
     setError("");
@@ -31,8 +36,20 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Props)
     try {
       const { text, pages, scanned } = await extractPdfText(file);
 
-      if (scanned) {
-        setError("PDF scanné détecté — le texte n'a pas pu être extrait. Utilisez un PDF avec du texte sélectionnable.");
+      if (scanned || !text.trim()) {
+        // Add scanned doc with empty chunks
+        const doc: StoredDocument = {
+          id: crypto.randomUUID(),
+          name: file.name,
+          text: "",
+          pages,
+          chunks: [],
+          toc: [],
+          totalChars: 0,
+          indexedAt: new Date().toISOString(),
+          scanned: true,
+        };
+        onDocumentsChange([...documents, doc]);
         setProcessing(false);
         return;
       }
@@ -54,6 +71,7 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Props)
         toc: data.toc as string[],
         totalChars: data.totalChars,
         indexedAt: new Date().toISOString(),
+        scanned: false,
       };
 
       onDocumentsChange([...documents, doc]);
@@ -97,10 +115,17 @@ export default function DocumentLibrary({ documents, onDocumentsChange }: Props)
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#00c896]/8 border border-[#00c896]/15">
-                    <span className="dot bg-[#00c896]"></span>
-                    <span className="font-label text-[0.6rem] text-[#00c896]">Indexé</span>
-                  </span>
+                  {doc.scanned ? (
+                    <span className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#ff6b4a]/8 border border-[#ff6b4a]/15">
+                      <span className="dot bg-[#ff6b4a]"></span>
+                      <span className="font-label text-[0.6rem] text-[#ff6b4a]">Scanné</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#00c896]/8 border border-[#00c896]/15">
+                      <span className="dot bg-[#00c896]"></span>
+                      <span className="font-label text-[0.6rem] text-[#00c896]">Indexé</span>
+                    </span>
+                  )}
                   <button onClick={() => removeDoc(doc.id)} className="text-[#4a5568] hover:text-[#ff6b4a] transition-colors font-label text-xs">
                     Supprimer
                   </button>

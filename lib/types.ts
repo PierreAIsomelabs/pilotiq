@@ -13,6 +13,7 @@ export interface StoredDocument {
   toc: string[];
   totalChars: number;
   indexedAt: string;
+  scanned?: boolean;
 }
 
 export interface Question {
